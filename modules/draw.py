@@ -24,18 +24,12 @@ class Cell:
         return self.img
 
     def put_text(self, text, kagle=50, color='black'):
-        if color == 'black':
-            color = (255, 255, 255, 255)
-        elif color == 'red':
-            color = (255, 0, 0, 255)
-        elif color == 'blue':
-            color = (0, 0, 255, 255)
         text = str(text)
         w, h = self.w, self.h
         font = ImageFont.truetype("arial.ttf", kagle)
         img_txt = Image.new('L', font.getsize(text))
         draw_txt = ImageDraw.Draw(img_txt)
-        draw_txt.text((0,0), text, font=font, fill=color)
+        draw_txt.text((0,0), text, font=font, fill=255)
         img_txt = ImageOps.invert(img_txt)
         img_txt = img_txt.rotate(90, expand=1)
         w = self.center(w, font.getsize(text)[0])
