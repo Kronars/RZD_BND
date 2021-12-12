@@ -20,16 +20,22 @@ class Cell:
     def draw_cell(self):
         self.draw.rectangle((0, 0, self.w, self.h),
                             width=3, outline='black')
-        self.put_text() if self.h == 180 else lambda: None
+        self.put_text(self.km) if self.h == 180 else lambda: None
         return self.img
 
-    def put_text(self, kagle=50):
-        text = str(self.km)
+    def put_text(self, text, kagle=50, color='black'):
+        if color == 'black':
+            color = (255, 255, 255, 255)
+        elif color == 'red':
+            color = (255, 0, 0, 255)
+        elif color == 'blue':
+            color = (0, 0, 255, 255)
+        text = str(text)
         w, h = self.w, self.h
         font = ImageFont.truetype("arial.ttf", kagle)
         img_txt = Image.new('L', font.getsize(text))
         draw_txt = ImageDraw.Draw(img_txt)
-        draw_txt.text((0,0), text, font=font, fill=255)
+        draw_txt.text((0,0), text, font=font, fill=color)
         img_txt = ImageOps.invert(img_txt)
         img_txt = img_txt.rotate(90, expand=1)
         w = self.center(w, font.getsize(text)[0])
@@ -40,22 +46,58 @@ class Cell:
     def add_icon(self, icons):
         const, r_x, r_y = 20, 70, 70
         for icon in icons:
-            icon = Image.open(os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), 'modules', 'Pics', icon))
-            icon = icon.resize((r_x, r_y), resample=0)
-            x, y = self.x, self.y
-            self.scrim_img.paste(icon, (x + 15, y + const)) #x, y-координаты угла ячейки. x+3 - смещение на константу 3. y+const - смещение вниз
-            const += r_y + 3 #количеств пикселей для отступа вниз + 10 для зазора между иконок
+            if icon != 'bridge.png':
+                icon = Image.open(os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), 'modules', 'Pics', icon))
+                icon = icon.resize((r_x, r_y), resample=0)
+                x, y = self.x, self.y
+                self.scrim_img.paste(icon, (x + 15, y + const)) #x, y-координаты угла ячейки. x+3 - смещение на константу 3. y+const - смещение вниз
+                const += r_y + 3 #количеств пикселей для отступа вниз + 10 для зазора между иконок
+            else:
+                icon = Image.open(os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), 'modules', 'Pics', icon))
+                icon = icon.resize((r_x, r_y), resample=0)
+                x, y = self.x, self.y
+                self.scrim_img.paste(icon, (x + 20, y - 620))
 
     def add_line(self, data_dict, column_name=None):
-        print(f'data_dict={data_dict}')
         percent = data_dict['Процент']
-        print(f'percent={percent}')
-        y = self.y
         x = self.x + percent
-        vertical_line_y = y + 900
-        self.scrim_draw.line((x, y, x, vertical_line_y), width=3, fill='red')
-        print(f'x={x}, y={y}, vertical_line_y={vertical_line_y}')
-        # self.scrim_img.paste()
+        y = self.y
+        vert_line = lambda x, y, y2, color: self.scrim_draw.line((x, y, x, y2), width=5, fill=color)
+        tilt_line = lambda x, y, k, color: self.scrim_draw.line((x, y, x + k, y - k), width=5, fill=color)
+        tilt_line_k = int((((self.y * 3.5) ** 2) / 2) ** 0.5)
+        vert_down_y = y + 900
+        if column_name == 'Светофоры':
+            color = data_dict['Цвет']
+            color = 'red' if color == 'красный' else 'blue'
+            vertical_line_y = y + 900
+            vert_line(x, y, vertical_line_y, color)
+            tilt_line(x, y, vert_down_y, color)
+        elif column_name == 'Граничные стрелки станций':
+            color = 'red'
+            self.add_dotted_lines(x, y, color)
+            # tilt_line(x, y, tilt_line_k, color)
+            # vert_line(x, y, vert_down_y, color)
+        elif column_name == 'Оси станций':
+            color = 'green'
+            self.add_dotted_lines(x, y, color)
+            # vert_line(x, y, tilt_line_k, color)
+            # tilt_line(x, y, vert_down_y, color)
+    
+    def add_dotted_lines(self, x, y, color):
+        global_x = x
+        global_y = y
+        h = 28000 - self.y
+        stop = int(h * 3.5)
+        step = 15
+        grand_step = stop/int(stop/step)
+        for x in range(x, stop+int(stop/step), step):
+            self.scrim_draw.line((x, y, x + 2, y+2), width=10, fill=color)
+            y -= grand_step
+            
+        stop1 = h    
+        for _ in range(global_x, stop1+int(stop1/step), step):
+            self.scrim_draw.line((global_x, global_y, global_x, global_y+5), width=5, fill=color)
+            global_y += step       
 
 class Grid:
     def __init__(self, path, min, max) -> None:
@@ -87,11 +129,6 @@ class Grid:
     def save(self):
         self.img.save(self.path_to_save, 'PNG')
 
-    def update_all(self):
-        for column in self.cells.values():
-            for cell in column:
-                cell.draw_cell()
-
     def draw_grid(self):
         for i, km in enumerate(self.km):
             y = self.rect_h
@@ -106,6 +143,7 @@ class Grid:
             end_line = int((((self.upper_line * 3.5) ** 2) / 2) ** 0.5)
             self.draw.line([(x, y), (x+end_line, y-end_line)], width=2, fill='black')
         end_line = int((((self.upper_line * 3.5) ** 2) / 2) ** 0.5)
+        # self.tilt_line_k = end_line
         self.draw.line([(x + self.cell_w, y), (x+end_line + self.cell_w, y-end_line)], width=2, fill='black')
         self.img.save(self.path_to_save, 'PNG')
 
@@ -115,10 +153,11 @@ def draw_nomogramma(data, output_path, start, end):
     grid.draw_grid()
     data.set_index('Киллометр', inplace=True)
     for km, row in data.iterrows():
-        #row['Мосты'] -> dict
+        bridges = row['Мосты']
         icons_to_add = []
-        lines_to_add = []
         light = row['Светофоры']
+        stations = row['Оси станций']
+        start_end_station = row['Граничные стрелки станций']
         cars = row['Переезды'] # параметр 'Наличие дежурного' ? 
         ktsm = row['Комплексы технических средств мониторинга (КТСМ)'] 
         yks = row['Устройства контроля схода подвижного состава (УКСПС)']
@@ -130,20 +169,24 @@ def draw_nomogramma(data, output_path, start, end):
         elif cars and cars['Наличие дежурного'] == 'Без дежурного':
             icons_to_add.append('red_car.png')
 
-        print(f'light={light}')
         if isinstance(light, dict):
-            grid.cells[km][3].add_line(light)
+            grid.cells[km][3].add_line(light, 'Светофоры')
+
+        if isinstance(start_end_station, dict):
+            grid.cells[km][3].add_line(start_end_station, 'Граничные стрелки станций')
+    
+        if isinstance(stations, dict):
+            grid.cells[km][3].add_line(stations, 'Оси станций')
+            
+        if isinstance(bridges, dict):
+            icons_to_add.append('bridge.png')
             
         icons_to_add.append('yellow_box.png') if ktsm else lambda: None
         icons_to_add.append('blue_box.png') if yks else lambda: None
         icons_to_add.append('red_arrow.png') if obr else lambda: None
         icons_to_add.append('LEP.png') if lep else lambda: None
 
-        
-
         grid.cells[km][0].add_icon(icons_to_add)
 
-    grid.save()
 
-# print('_________________')
-# draw_nomogramma(None, r'C:\Users\Senya\Prog_2\RZD', 10, 20)
+    grid.save()
